@@ -1,6 +1,6 @@
 #![allow(unused)]
 use std::io::prelude::*;
-use std::io::{Read, Write, Error};
+use std::io::{self, Read, Write, Error};
 use std::str::FromStr;
 use std::thread;
 use std::net::{TcpListener, TcpStream};
@@ -17,12 +17,39 @@ pub enum Weapon{
 }
 
 fn main() {//-> std::io::Result<()> {
+
 	//start_tcp_listener();
-	test_battle_logic();
+	//test_battle_logic();
+	loop {
+		battle_robot();
+	}
+
+}
+
+/**
+* Allows user to battle computer
+*/
+fn battle_robot(){
+	battle(grab_input(), rand::random());
 }
 
 
+fn grab_input() -> Weapon{
+	println!("Rock, Paper, or Scissors?:");
 
+	let mut input = String::new();
+	match io::stdin().read_line(&mut input){
+		Ok(_) => {
+			let choice = Weapon::from_str(&input.to_uppercase()).unwrap();
+			return choice;
+
+		}
+		Err(e) => {
+			println!("Try again");
+			return grab_input();
+		}
+	}
+}
 
 
 
@@ -40,15 +67,18 @@ impl Distribution<Weapon> for Standard {
     }
 }
 
+/**
+* Turns str into Weapon 
+*/
 impl FromStr for Weapon {
 
     type Err = ();
 
     fn from_str(input: &str) -> Result<Weapon, Self::Err> {
         match input {
-            "Rock" => Ok(Weapon::Rock),
-            "Paper"  => Ok(Weapon::Paper),
-            "Scissors"  => Ok(Weapon::Scissors),
+            "ROCK" => Ok(Weapon::Rock),
+            "PAPER"  => Ok(Weapon::Paper),
+            "SCISSORS"  => Ok(Weapon::Scissors),
             _  => Err(()),
         }
     }
