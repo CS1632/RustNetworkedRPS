@@ -1,6 +1,9 @@
 #![allow(unused)]
 use std::io::prelude::*;
-use std::net::TcpStream;
+use std::io::{Read, Write, Error};
+use std::str::FromStr;
+use std::thread;
+use std::net::{TcpListener, TcpStream};
 use rand::{
     distributions::{Distribution, Standard},
     Rng,
@@ -14,8 +17,12 @@ pub enum Weapon{
 }
 
 fn main() {//-> std::io::Result<()> {
+	//start_tcp_listener();
 	test_battle_logic();
 }
+
+
+
 
 
 
@@ -29,6 +36,20 @@ impl Distribution<Weapon> for Standard {
             0 => Weapon::Rock,
             1 => Weapon::Paper,
             _ => Weapon::Scissors,
+        }
+    }
+}
+
+impl FromStr for Weapon {
+
+    type Err = ();
+
+    fn from_str(input: &str) -> Result<Weapon, Self::Err> {
+        match input {
+            "Rock" => Ok(Weapon::Rock),
+            "Paper"  => Ok(Weapon::Paper),
+            "Scissors"  => Ok(Weapon::Scissors),
+            _  => Err(()),
         }
     }
 }
@@ -78,5 +99,35 @@ fn battle(my_weapon: Weapon, opp_weapon: Weapon){
 		if opp_weapon == Weapon::Scissors {
 			println!("{:?} ties {:?}", my_weapon, opp_weapon);
 		}
+	}
+}
+
+
+
+/**
+ * Sets up TCP listener
+ */
+fn start_tcp_listener() {
+	let listener = TcpListener::bind("0.0.0.0:8888")
+		.expect("Could not bind");
+		for stream in listener.incoming() {
+			match stream {
+				Err(e) => { eprintln!("failed: {}", e)}
+				Ok(stream) => {
+					thread::spawn(move || {
+						handle_client(stream).unwrap_or_else(|error| eprintln!("{:?}", error));
+					});
+				}
+			}
+		}
+}
+
+fn handle_client(mut stream: TcpStream) -> Result<(), Error>{
+	println!("Incoming connection from: {}", stream.peer_addr()?);
+	let mut buf = [0;512];
+	loop {
+		let bytes_read = stream.read(&mut buf)?;
+		if bytes_read == 0 {return Ok(())}
+		stream.write(&buf[..bytes_read])?;
 	}
 }

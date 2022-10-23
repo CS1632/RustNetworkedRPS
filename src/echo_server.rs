@@ -1,4 +1,3 @@
-use std::io::prelude::*;
 use std::io::{Read, Write, Error};
 use std::thread;
 use std::net::{TcpListener, TcpStream};
