@@ -17,11 +17,14 @@ pub enum Weapon{
 }
 
 fn main() {//-> std::io::Result<()> {
-
+	std::env::set_var("RUST_BACKTRACE", "1");
 	//start_tcp_listener();
 	//test_battle_logic();
+
 	loop {
 		battle_robot();
+		//let test = Weapon::from_str("ROCK").unwrap();
+		//println!("Weapon type: {:?}", test);
 	}
 
 }
@@ -40,9 +43,9 @@ fn grab_input() -> Weapon{
 	let mut input = String::new();
 	match io::stdin().read_line(&mut input){
 		Ok(_) => {
-			let choice = Weapon::from_str(&input.to_uppercase()).unwrap();
+			input = input.to_uppercase();
+			let choice = Weapon::from_str(&input).unwrap();
 			return choice;
-
 		}
 		Err(e) => {
 			println!("Try again");
