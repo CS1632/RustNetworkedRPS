@@ -17,7 +17,7 @@ pub enum Weapon{
 }
 
 fn main() {//-> std::io::Result<()> {
-	std::env::set_var("RUST_BACKTRACE", "1");
+	//std::env::set_var("RUST_BACKTRACE", "1");
 	//start_tcp_listener();
 	//test_battle_logic();
 
@@ -43,7 +43,6 @@ fn grab_input() -> Weapon{
 	let mut input = String::new();
 	match io::stdin().read_line(&mut input){
 		Ok(_) => {
-			input = input.to_uppercase();
 			let choice = Weapon::from_str(&input).unwrap();
 			return choice;
 		}
@@ -78,7 +77,9 @@ impl FromStr for Weapon {
     type Err = ();
 
     fn from_str(input: &str) -> Result<Weapon, Self::Err> {
-        match input {
+		let tu = input.to_uppercase();
+		let trim = tu.trim();
+        match trim {
             "ROCK" => Ok(Weapon::Rock),
             "PAPER"  => Ok(Weapon::Paper),
             "SCISSORS"  => Ok(Weapon::Scissors),
