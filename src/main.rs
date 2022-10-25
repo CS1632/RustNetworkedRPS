@@ -1,6 +1,7 @@
 #![allow(unused)]
-use std::io::prelude::*;
+use std::io::{prelude::*, BufReader};
 use std::io::{self, Read, Write, Error};
+use std::str;
 use std::str::FromStr;
 use std::thread;
 use std::net::{TcpListener, TcpStream};
@@ -8,6 +9,7 @@ use rand::{
     distributions::{Distribution, Standard},
     Rng,
 };
+use std::sync::Mutex;
 
 #[derive(PartialEq, Debug)]
 pub enum Weapon{
@@ -16,17 +18,54 @@ pub enum Weapon{
 	Scissors
 }
 
-fn main() {//-> std::io::Result<()> {
-	//std::env::set_var("RUST_BACKTRACE", "1");
-	//start_tcp_listener();
-	//test_battle_logic();
+#[derive(PartialEq, Debug, Copy, Clone)]
+pub enum Role{
+	Host,
+	Client,
+}
 
-	loop {
-		battle_robot();
-		//let test = Weapon::from_str("ROCK").unwrap();
-		//println!("Weapon type: {:?}", test);
+
+static mut MUTEX: Mutex<i32> = Mutex::new(0);
+//static mut HOST_W: Weapon;
+//static mut CLIENT_W: Weapon;
+
+fn main() {
+	let role = get_role();
+	match role {
+		Role::Host => {
+			thread::spawn(|| {
+				host();
+			});
+		}
+		Role::Client => {
+		//client_available = true;
+			thread::spawn(|| {
+				client();
+			});
+		}
 	}
+	loop {
+		//battle_robot();
+		battle_human(role);
+	}
+}
 
+/**
+ * Asks user their server role
+ */
+fn get_role() -> Role{
+	println!("Do you wanna be the host or a client?");
+	let mut input = String::new();
+	match io::stdin().read_line(&mut input){
+		Ok(_) => {
+			let choice = Role::from_str(&input).unwrap();
+			return choice;
+		}
+		Err(e) => {
+			println!("Try again");
+			return get_role();
+		}
+	}
 }
 
 /**
@@ -37,6 +76,25 @@ fn battle_robot(){
 }
 
 
+/**
+ * Host and client can battle
+ */
+fn battle_human(role: Role){
+	//enter your weapon type
+	grab_input();
+
+	//host goes first...
+	//then client goes...
+	//and then battle
+
+
+	
+}
+
+
+/**
+ * Gets user's weapon
+ */
 fn grab_input() -> Weapon{
 	println!("Rock, Paper, or Scissors?:");
 
@@ -52,7 +110,6 @@ fn grab_input() -> Weapon{
 		}
 	}
 }
-
 
 
 /**
@@ -89,13 +146,28 @@ impl FromStr for Weapon {
 }
 
 /**
+* Turns str into Role
+*/
+impl FromStr for Role {
+    type Err = ();
+    fn from_str(input: &str) -> Result<Role, Self::Err> {
+		let tu = input.to_uppercase();
+		let trim = tu.trim();
+        match trim {
+            "HOST"  => Ok(Role::Host),
+			//by default, you will be a client
+            _  => Ok(Role::Client),
+        }
+    }
+}
+
+/**
  * Runs 100 randomly generated battles to test the battle logic
  */
 fn test_battle_logic(){
 	for _i in 1..100 {
 		battle(rand::random(), rand::random());
 	};
-	
 }
 
 
@@ -141,7 +213,8 @@ fn battle(my_weapon: Weapon, opp_weapon: Weapon){
 /**
  * Sets up TCP listener
  */
-fn start_tcp_listener() {
+fn host() {
+	println!("Setting up server...");
 	let listener = TcpListener::bind("0.0.0.0:8888")
 		.expect("Could not bind");
 		for stream in listener.incoming() {
@@ -156,12 +229,35 @@ fn start_tcp_listener() {
 		}
 }
 
+
 fn handle_client(mut stream: TcpStream) -> Result<(), Error>{
-	println!("Incoming connection from: {}", stream.peer_addr()?);
+	println!("Player 2 connecting from: {}", stream.peer_addr()?);
 	let mut buf = [0;512];
 	loop {
 		let bytes_read = stream.read(&mut buf)?;
 		if bytes_read == 0 {return Ok(())}
 		stream.write(&buf[..bytes_read])?;
+	}
+}
+
+
+fn client() {
+	let mut stream = TcpStream::connect("127.0.0.1:8888")
+	.expect("Could not connect to server");
+	loop {
+		let mut input = String::new();
+		let mut buffer: Vec<u8> = Vec::new();
+		io::stdin()
+			.read_line(&mut input)
+			.expect("Failed to read from stdin");
+		//get weapon from client
+		let w = Weapon::from_str(&input)
+			.expect("Invalid weapon");
+		//stream.write(input.as_bytes()).expect("Failed to write to server");
+
+		let mut reader = BufReader::new(&stream);
+
+		reader.read_until(b'\n', &mut buffer).expect("Could not read into buffer");
+		print!("{}", str::from_utf8(&buffer).expect("Could not write buffer as string"));
 	}
 }
