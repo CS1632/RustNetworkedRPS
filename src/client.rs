@@ -1,19 +1,49 @@
-use std::net::TcpStream;
-use std::str;
-use std::io::{self, BufRead, BufReader, Write};
+use std::net::{TcpStream};
+use std::io;
+use std::io::{Read, Write};
+use std::str::from_utf8;
 
 fn main() {
-	let mut stream = TcpStream::connect("127.0.0.1:8888")
-		.expect("Could not connect to server");
+	let mut host = TcpStream::connect("127.0.0.1:9800");
 	loop {
-		let mut input = String::new();
-		let mut buffer: Vec<u8> = Vec::new();
-		io::stdin().read_line(&mut input).expect("Failed to read from stdin");
-		stream.write(input.as_bytes()).expect("Failed to write to server");
+		match host {
+			Ok(ref mut stream) => {
+				println!("Successfully connected to server in port 9800");
+				let msg: String = get_input();
+				stream.write(msg.as_bytes()).unwrap();
 
-		let mut reader = BufReader::new(&stream);
+				let mut data = vec![0 as u8; msg.len()]; //sets buffer to be the length of the message
+				match stream.read_exact(&mut data) {
+					Ok(_) => {
+						if !data.eq(msg.as_bytes()) {
+							println!("Unexpected reply: {}", from_utf8(&data).unwrap());
+						}
+					},
+					Err(e) => {
+						println!("Heard no response from server", e);
+					}
+				}
+			},
+			Err(ref e) => {
+				println!("Failed to connect: {}", e);
+				break;
+			}
+		}
+	}	
+	println!("Connection terminated");
+}
 
-		reader.read_until(b'\n', &mut buffer).expect("Could not read into buffer");
-		print!("{}", str::from_utf8(&buffer).expect("Could not write buffer as string"));
+
+fn get_input() -> String {
+	println!("Rock, Paper, or Scissors?:");
+
+	let mut input: String = String::new();
+	match io::stdin().read_line(&mut input){
+		Ok(_) => {
+			return input.trim().to_string();
+		}
+		Err(_e) => {
+			return String::from("Error");
+		}
 	}
 }
