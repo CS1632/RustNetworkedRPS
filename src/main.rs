@@ -1,15 +1,12 @@
 #![allow(unused)]
-use std::io::{prelude::*, BufReader};
-use std::io::{self, Read, Write, Error};
-use std::str;
-use std::str::FromStr;
+use std::io::{self, prelude::*, BufReader, Read, Write, Error};
+use std::str::{self, from_utf8, FromStr};
+use std::net::{TcpListener, TcpStream, Shutdown};
+use rand::{distributions::{Distribution, Standard}, Rng};
+use std::sync::mpsc::*;
 use std::thread;
-use std::net::{TcpListener, TcpStream};
-use rand::{
-    distributions::{Distribution, Standard},
-    Rng,
-};
-use std::sync::Mutex;
+
+
 
 #[derive(PartialEq, Debug)]
 pub enum Weapon{
@@ -25,12 +22,10 @@ pub enum Role{
 }
 
 
-static mut MUTEX: Mutex<i32> = Mutex::new(0);
-//static mut HOST_W: Weapon;
-//static mut CLIENT_W: Weapon;
 
 fn main() {
 	let role = get_role();
+	let (mut tx, mut rx): (Sender<Weapon>, Receiver<Weapon>) = channel();
 	match role {
 		Role::Host => {
 			thread::spawn(|| {
@@ -72,7 +67,8 @@ fn get_role() -> Role{
 * Allows user to battle computer
 */
 fn battle_robot(){
-	battle(grab_input(), rand::random());
+	println!("Rock, paper, or scissors?");
+	battle(Weapon::from_str(&get_input()).unwrap(), rand::random());
 }
 
 
@@ -81,7 +77,7 @@ fn battle_robot(){
  */
 fn battle_human(role: Role){
 	//enter your weapon type
-	grab_input();
+	get_input();
 
 	//host goes first...
 	//then client goes...
@@ -92,24 +88,6 @@ fn battle_human(role: Role){
 }
 
 
-/**
- * Gets user's weapon
- */
-fn grab_input() -> Weapon{
-	println!("Rock, Paper, or Scissors?:");
-
-	let mut input = String::new();
-	match io::stdin().read_line(&mut input){
-		Ok(_) => {
-			let choice = Weapon::from_str(&input).unwrap();
-			return choice;
-		}
-		Err(e) => {
-			println!("Try again");
-			return grab_input();
-		}
-	}
-}
 
 
 /**
@@ -214,50 +192,95 @@ fn battle(my_weapon: Weapon, opp_weapon: Weapon){
  * Sets up TCP listener
  */
 fn host() {
-	println!("Setting up server...");
-	let listener = TcpListener::bind("0.0.0.0:8888")
-		.expect("Could not bind");
-		for stream in listener.incoming() {
-			match stream {
-				Err(e) => { eprintln!("failed: {}", e)}
-				Ok(stream) => {
-					thread::spawn(move || {
-						handle_client(stream).unwrap_or_else(|error| eprintln!("{:?}", error));
-					});
-				}
-			}
-		}
+	//I chose 9800 because that's my birthday, other than that, the specific port number isn't import.
+    let listener = TcpListener::bind("0.0.0.0:9800").unwrap();
+    // accept connections and process them, spawning a new thread for each one
+    //println!("Server listening on port 9800");
+	println!("Waiting for client to join...");
+    for stream in listener.incoming() {
+        match stream {
+            Ok(stream) => {
+				//Connection succeeded
+                println!("Player 2 connected from: {}", stream.peer_addr().unwrap());
+                thread::spawn(move|| {
+                    handle_client(stream)
+                });
+            }
+            Err(e) => {
+				//Connection failed
+                println!("Error: {}", e);
+            }
+        }
+    }
+    // close the socket server
+    drop(listener);
 }
 
 
-fn handle_client(mut stream: TcpStream) -> Result<(), Error>{
-	println!("Player 2 connecting from: {}", stream.peer_addr()?);
-	let mut buf = [0;512];
-	loop {
-		let bytes_read = stream.read(&mut buf)?;
-		if bytes_read == 0 {return Ok(())}
-		stream.write(&buf[..bytes_read])?;
-	}
+/**
+ * Called from host() to handle data recieved from TCP Stream
+ */
+fn handle_client(mut stream: TcpStream) {
+	//use a 10 char buffer. we don't really need more data for what we're sending.
+    let mut data = [0 as u8; 10];
+    while match stream.read(&mut data) {
+        Ok(size) => {
+			if size > 0 {
+				//write data to the console
+				println!("{}", String::from_utf8((&data[0..size]).to_vec()).unwrap());
+				//write data to the stream	
+				stream.write(&data[0..size]).unwrap();
+			}
+			true
+		}
+        Err(_) => {
+            println!("An error occurred, terminating connection with {}", stream.peer_addr().unwrap());
+            stream.shutdown(Shutdown::Both).unwrap();
+            false
+        }
+	} {}
 }
 
 
 fn client() {
-	let mut stream = TcpStream::connect("127.0.0.1:8888")
-	.expect("Could not connect to server");
+	let mut host = TcpStream::connect("127.0.0.1:9800");
 	loop {
-		let mut input = String::new();
-		let mut buffer: Vec<u8> = Vec::new();
-		io::stdin()
-			.read_line(&mut input)
-			.expect("Failed to read from stdin");
-		//get weapon from client
-		let w = Weapon::from_str(&input)
-			.expect("Invalid weapon");
-		//stream.write(input.as_bytes()).expect("Failed to write to server");
+		match host {
+			Ok(ref mut stream) => {
+				println!("Successfully connected to server in port 9800");
+				let msg: String = get_input();
+				stream.write(msg.as_bytes()).unwrap();
 
-		let mut reader = BufReader::new(&stream);
+				let mut data = vec![0 as u8; msg.len()]; //sets buffer to be the length of the message
+				match stream.read_exact(&mut data) {
+					Ok(_) => {
+						if !data.eq(msg.as_bytes()) {
+							println!("Unexpected reply: {}", from_utf8(&data).unwrap());
+						}
+					},
+					Err(_e) => {
+						println!("Heard no response from server");
+					}
+				}
+			},
+			Err(ref e) => {
+				println!("Failed to connect: {}", e);
+				break;
+			}
+		}
+	}	
+	println!("Connection terminated");
+}
 
-		reader.read_until(b'\n', &mut buffer).expect("Could not read into buffer");
-		print!("{}", str::from_utf8(&buffer).expect("Could not write buffer as string"));
+
+fn get_input() -> String {
+	let mut input: String = String::new();
+	match io::stdin().read_line(&mut input){
+		Ok(_) => {
+			return input.trim().to_string();
+		}
+		Err(_e) => {
+			return String::from("Error");
+		}
 	}
 }
